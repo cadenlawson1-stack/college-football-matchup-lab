@@ -1,22 +1,24 @@
 'use strict';
 const $=id=>document.getElementById(id);
 const METRICS=[
- ['PPA / play','ppa','number','Expected points added per play (CFBD PPA).'],
- ['Success rate','successRate','percent','Share of plays meeting CFBD success thresholds.'],
- ['Explosiveness','explosiveness','number','Average PPA on successful plays.'],
- ['Passing PPA','passingPlays.ppa','number','PPA per passing play.'],
- ['Passing success','passingPlays.successRate','percent','Success rate on passing plays.'],
- ['Rushing PPA','rushingPlays.ppa','number','PPA per rushing play.'],
- ['Rushing success','rushingPlays.successRate','percent','Success rate on rushing plays.'],
- ['Standard-down success','standardDowns.successRate','percent','Success rate on standard downs.'],
- ['Passing-down success','passingDowns.successRate','percent','Success rate on passing downs.'],
- ['Points / opportunity','pointsPerOpportunity','number','Points per scoring opportunity.'],
- ['Havoc rate','havoc.total','percent','Havoc caused (defense) or allowed (offense).'],
- ['Stuff rate','stuffRate','percent','Rushes stopped at or behind the line.'],
- ['Power success','powerSuccess','percent','Success in short-yardage rushing situations.'],
- ['Line yards / rush','lineYards','number','Blocking contribution estimate per rush.'],
- ['Second-level yards','secondLevelYards','number','Second-level rushing yards per rush.'],
- ['Open-field yards','openFieldYards','number','Open-field rushing yards per rush.']
+ ['Overall EPA / play','ppa','number','CFBD PPA: expected scoring value added per play. Offense: produced; defense: allowed.','Overall efficiency'],
+ ['Overall success rate','successRate','percent','Successful plays gain at least 50% of needed yards on first down, 70% on second, and 100% on third or fourth.'],
+ ['Explosiveness','explosiveness','number','Average EPA (CFBD PPA) on successful plays.'],
+ ['Passing EPA / play','passingPlays.ppa','number','Passing efficiency: EPA per passing play. Offense: produced; defense: allowed.','Passing efficiency'],
+ ['Passing success rate','passingPlays.successRate','percent','Passing efficiency: share of passing plays classified as successful.'],
+ ['Passing explosiveness','passingPlays.explosiveness','number','Average EPA (CFBD PPA) on successful passing plays.'],
+ ['Rushing EPA / play','rushingPlays.ppa','number','Rushing efficiency: EPA per rushing play. Offense: produced; defense: allowed.','Rushing efficiency'],
+ ['Rushing success rate','rushingPlays.successRate','percent','Rushing efficiency: share of rushing plays classified as successful.'],
+ ['Rushing explosiveness','rushingPlays.explosiveness','number','Average EPA (CFBD PPA) on successful rushing plays.'],
+ ['Standard-down success','standardDowns.successRate','percent','Success rate on standard downs.','Situations & scoring'],
+ ['Passing-down success','passingDowns.successRate','percent','Success rate on second-and-8+, or third/fourth-and-5+.'],
+ ['Points / opportunity','pointsPerOpportunity','number','Points per drive reaching the opponent’s 40-yard line or closer.'],
+ ['Havoc allowed / created','havoc.total','percent','Offense: havoc allowed (lower is better). Defense: havoc created (higher is better).','Disruption & the run game'],
+ ['Stuff rate','stuffRate','percent','Offense: rushes stuffed (lower is better). Defense: opponent rushes stuffed (higher is better).'],
+ ['Power success','powerSuccess','percent','Short-yardage rushing success: produced by offense, allowed by defense.'],
+ ['Line yards / rush','lineYards','number','Blocking contribution per rush: produced by offense, allowed by defense.'],
+ ['Second-level yards','secondLevelYards','number','Second-level rushing yards per rush: produced by offense, allowed by defense.'],
+ ['Open-field yards','openFieldYards','number','Open-field rushing yards per rush: produced by offense, allowed by defense.']
 ];
 let data=null,selected=null;
 function val(obj,path){return path.split('.').reduce((o,k)=>o?.[k],obj);}
@@ -24,15 +26,31 @@ function finite(v){return typeof v==='number'&&Number.isFinite(v);}
 function format(v,type){return finite(v)?(type==='percent'?(v*100).toFixed(1)+'%':v.toFixed(2)):'—';}
 function text(id,value){$(id).textContent=value;}
 function option(label,value){const o=document.createElement('option');o.value=value;o.textContent=label;return o;}
+function unitRank(team,unit,path){
+ const v=val(team?.[unit],path);if(!finite(v))return null;
+ const values=Object.values(data?.teams||{}).map(t=>val(t[unit],path)).filter(finite);
+ const inverse=['havoc.total','stuffRate'].includes(path),lower=unit==='defense'?!inverse:inverse;
+ return {rank:1+values.filter(x=>lower?x<v:x>v).length,total:values.length};
+}
+function renderMatchup(prefix,offense,defense){
+ text(prefix+'-title',(offense?.name||'Away')+' offense vs. '+(defense?.name||'Home')+' defense');
+ const header=(id,name,unit)=>{const th=$(id);th.replaceChildren(document.createTextNode(name));const small=document.createElement('small');small.textContent=unit;th.append(small);};
+ header(prefix+'-offense',offense?.name||'Offense','OFFENSE');header(prefix+'-defense',defense?.name||'Defense','DEFENSE');
+ const rows=[];
+ METRICS.forEach(([label,path,type,description,group])=>{
+  if(group){const row=document.createElement('tr'),th=document.createElement('th');th.colSpan=3;th.scope='colgroup';th.textContent=group;row.className='metric-group';row.append(th);rows.push(row);}
+  const row=document.createElement('tr');row.dataset.metric=path;
+  const metric=document.createElement('th');metric.scope='row';metric.textContent=label;metric.title=description;
+  const cell=(team,unit)=>{const td=document.createElement('td'),v=val(team?.[unit],path);td.textContent=format(v,type);const rank=unitRank(team,unit,path);
+   if(rank){const small=document.createElement('small');small.textContent='#'+rank.rank+' / '+rank.total;small.setAttribute('aria-label','FBS '+unit+' rank '+rank.rank+' of '+rank.total);td.append(small);if(rank.rank<=Math.ceil(rank.total/4))td.className='top-unit';}
+   return td;};
+  row.append(cell(offense,'offense'),metric,cell(defense,'defense'));rows.push(row);
+ });
+ $(prefix+'-metrics').replaceChildren(...rows);
+}
 function renderMetrics(){
- const away=data?.teams?.[$('away').value],home=data?.teams?.[$('home').value],view=$('view').value;
- text('stat-away',away?.name||'Away');text('stat-home',home?.name||'Home');
- $('metrics').replaceChildren(...METRICS.map(([label,path,type,description])=>{
-  const av=val(away?.[view],path),hv=val(home?.[view],path),row=document.createElement('tr');
-  const inverse=['havoc.total','stuffRate'].includes(path),lower=view==='defense'?!inverse:inverse;
-  [av,label,hv].forEach((v,i)=>{const td=document.createElement('td');td.textContent=i===1?label:format(v,type);if(i===1)td.title=description;
-   if(i!==1&&finite(av)&&finite(hv)&&av!==hv&&((i===0)===(lower?av<hv:av>hv)))td.className='better';row.append(td);});return row;
- }));
+ const away=data?.teams?.[$('away').value],home=data?.teams?.[$('home').value];
+ renderMatchup('away-matchup',away,home);renderMatchup('home-matchup',home,away);
 }
 function render(){
  renderMetrics();if(!data||data.status!=='ready')return;
@@ -73,4 +91,4 @@ async function init(){renderMetrics();try{
 function chooseGame(){selected=data.games.find(g=>String(g.id)===$('game').value)||null;if(selected){$('away').value=selected.away;$('home').value=selected.home;$('neutral').checked=Boolean(selected.neutral);history.replaceState(null,'','?game='+encodeURIComponent(selected.id));}else history.replaceState(null,'',location.pathname);render();}
 $('game').addEventListener('change',chooseGame);
 for(const id of ['away','home','neutral'])$(id).addEventListener('change',()=>{selected=null;$('game').value='';history.replaceState(null,'',location.pathname);render();});
-$('view').addEventListener('change',renderMetrics);init();
+init();
