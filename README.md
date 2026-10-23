@@ -15,7 +15,7 @@ This URL is not proof of deployment.
 
 ## Free-tier budget
 
-Initial API use: five games requests (four past seasons and current season) plus one current advanced-stats request. Normal daily use: two requests, about 62/month. Past seasons use an Actions cache; eviction causes a small history refetch. No per-visitor API requests. No credit card, paid data tier, server, or domain is required. CFBD documents 1,000 free calls/month as of October 23, 2026. Rate limits and endpoint access remain controlled by the provider.
+Initial API use: five games requests (four past seasons and current season), five game-level advanced-stat requests, and one season advanced-stat request (11 total). Normal daily use: three requests, about 93/month. Past seasons use an Actions cache; eviction causes a small history refetch. No per-visitor API requests. No credit card, paid data tier, server, or domain is required. CFBD documents 1,000 free calls/month as of October 23, 2026. Rate limits and endpoint access remain controlled by the provider.
 
 ## Data and model
 
@@ -35,3 +35,14 @@ python -m http.server 8080 --directory docs
 ```
 
 The CFBD secret is available only to the refresh process in Actions. The public snapshot includes team statistics, team model summaries, fixtures, and validation results. It never includes the key. Source: https://collegefootballdata.com. API documentation: https://api.collegefootballdata.com.
+
+
+## Efficiency-model research and experimental preview
+
+`efficiency.py` builds chronological, date-batched offense/defense profiles using completed FBS-versus-FBS games. It uses passing/rushing EPA and success, inferred pass mix, opponent-adjusted points per drive, and drive-count history. Recent games receive greater weight; previous-season weights decay by 50%. Opponent adjustments use pregame opponent estimates only. Ridge models predict points per drive and drives; an optional blend retains part of the original model.
+
+A fixed search of 36 decay/ridge/blend settings is selected on 2023 using training through 2022. Coefficients are then refit through 2023; probability scale is calibrated on 2024. The untouched 2025 season and completed 2026 games are evaluated on the same games as v1. Both week-block bootstrap confidence intervals must support improvement, with minimum score and Brier gains, non-worsening margin error, calibration checks, 95% advanced-data coverage, and a current-season non-regression check before automatic promotion. Years roll with the season; the model family and search/gates remain fixed.
+
+The first candidate reduced 2025 score MAE from 9.37 to 9.14 points per team and Brier error from 0.1896 to 0.1874, but its Brier improvement interval crossed zero. The original model remains the default; the dashboard labels the candidate as an experimental preview and displays both seasons' evidence. No holdout-driven retuning was performed after viewing these results.
+
+Modeling inputs include garbage time to align drive counts with final scores; dashboard comparison metrics exclude garbage time. Points per drive uses all team points (including defense/special teams), pass mix is inferred where possible, and historical data may have retrospective corrections. Evaluations are retrospective rather than archived pregame predictions. Game-level history is cached in Actions; visitors receive compact team profiles and coefficients, not raw history or API credentials.
