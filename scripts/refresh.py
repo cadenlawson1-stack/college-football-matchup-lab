@@ -3,6 +3,7 @@ import json, os, sys, urllib.request, urllib.parse
 from pathlib import Path
 from datetime import datetime, timezone
 from model import run, validate, probability, VERSION
+from efficiency import collect_history
 ROOT=Path(__file__).resolve().parents[1]
 DATA=ROOT/'docs/data'; CACHE=ROOT/'cache'; DATA.mkdir(parents=True,exist_ok=True); CACHE.mkdir(exist_ok=True)
 
@@ -33,6 +34,7 @@ def main():
     for row in advanced:
         if not isinstance(row.get('team'),str) or not isinstance(row.get('offense'),dict) or not isinstance(row.get('defense'),dict):
             raise RuntimeError('Advanced metric schema changed; last good snapshot preserved.')
+    collect_history(fetch,write,CACHE,ROOT,games,year)
     model, rows=run(games,now.isoformat()); report=validate(rows,year); model.season(year)
     teams={r['team']:dict(name=r['team'],conference=r.get('conference'),offense=r['offense'],defense=r['defense']) for r in advanced}
     for name, team in teams.items():
