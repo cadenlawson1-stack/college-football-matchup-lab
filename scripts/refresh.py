@@ -59,7 +59,7 @@ def main():
             projection=dict(home=round(h,1),away=round(a,1),homeWin=round(probability(h-a,report['scale']),4),experimental=report['status']!='passed',effectiveGames=round(n,1))))
     upcoming.sort(key=lambda g:g['date'])
     if len(teams)<50: raise RuntimeError('Incomplete FBS team response; last good snapshot preserved.')
-    snapshot=dict(status='ready',updatedAt=now.isoformat(),season=year,source='CollegeFootballData.com',modelVersion=active_version,validation=report,teams=teams,games=upcoming,modelComparison=comparison,candidateModel=dict(engine,scale=comparison["configuration"]["scale"],version=CANDIDATE_VERSION)))
+    snapshot=dict(status='ready',updatedAt=now.isoformat(),season=year,source='CollegeFootballData.com',modelVersion=active_version,validation=report,teams=teams,games=upcoming,modelComparison=comparison,candidateModel=dict(engine,scale=comparison["configuration"]["scale"],version=CANDIDATE_VERSION))
     write(DATA/'snapshot.json',snapshot)
     print(f'Updated {len(teams)} teams, {len(upcoming)} upcoming games; validation: {report["status"]}')
 
