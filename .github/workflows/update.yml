@@ -1,0 +1,58 @@
+name: Refresh data and deploy
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 10 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+concurrency:
+  group: matchup-pages
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test projection safeguards
+        run: python -m unittest discover -s tests -v
+      - name: Restore historical API cache
+        uses: actions/cache@v4
+        with:
+          path: cache
+          key: cfbd-history-v1-${{ github.run_id }}
+          restore-keys: cfbd-history-v1-
+      - name: Refresh data when configured
+        env:
+          CFBD_API_KEY: ${{ secrets.CFBD_API_KEY }}
+        run: |
+          if [ -n "$CFBD_API_KEY" ]; then
+            python scripts/refresh.py
+          else
+            echo 'CFBD_API_KEY is missing. Publishing setup state without invented data.'
+          fi
+      - name: Preserve successful snapshot
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/data/snapshot.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Refresh validated CFBD snapshot [skip ci]'
+            git push
+          fi
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - name: Publish site
+        id: deploy
+        uses: actions/deploy-pages@v4
